@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>The Gazette — Article</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="article">
+  <header class="site-header">
+    <div class="container header-row">
+      <div class="masthead">
+        <h1 class="site-title">The Gazette</h1>
+        <p class="tagline">Daily bulletins &amp; newsletters</p>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/">Home</a>
+        <a href="newsletters.html">Newsletters</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" id="main">
+    <article id="article-content" class="article-content"></article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>© The Gazette</small>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js" crossorigin="anonymous"></script>
+
+  <script src="script.js" type="module"></script>
+</body>
+</html>
