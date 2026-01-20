@@ -1,5 +1,8 @@
 name: Generate newsletter manifest
 
+permissions:
+  contents: write
+
 on:
   push:
     paths:
