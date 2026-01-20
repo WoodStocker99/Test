@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Validates newsletters/index.json and each .txt frontmatter keys
-// Exits with non-zero code on errors
 
 const fs = require('fs').promises;
 const path = require('path');

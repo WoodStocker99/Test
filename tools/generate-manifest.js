@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Scans newsletters/*.txt and writes newsletters/index.json (array of filenames)
-// Safe: ignores dotfiles, ensures relative names only.
+// Scans newsletters/*.txt and writes newsletters/index.json
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -13,7 +12,6 @@ async function listNewsletters() {
       .filter(e => e.isFile())
       .map(e => e.name)
       .filter(name => name.toLowerCase().endsWith('.txt') && !name.startsWith('.'));
-    // Sort by name for deterministic output
     files.sort();
     return files;
   } catch (err) {
