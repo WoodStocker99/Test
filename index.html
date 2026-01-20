@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Test — The Gazette</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-row">
+      <div class="masthead">
+        <h1 class="site-title">The Gazette</h1>
+        <p class="tagline">Daily bulletins &amp; newsletters</p>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" id="main">
+    <section id="news-feed" aria-live="polite">
+      <h2 class="sr-only">Latest newsletters</h2>
+      <div id="news-list" class="news-list"></div>
+    </section>
+
+    <aside id="article-view" class="article-view" hidden>
+      <button id="close-article" class="close-btn" aria-label="Close article">← Back</button>
+      <article id="article-content" class="article-content"></article>
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>© The Gazette</small>
+    </div>
+  </footer>
+
+  <script src="script.js" type="module"></script>
+</body>
+</html>
