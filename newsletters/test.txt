@@ -1,7 +1,7 @@
 ---
-Title: My Headline
-Subtitle: A short subtitle
-Author: Jane Reporter
-Thumbnail: thumbnails/example.jpg
+Title: My Headline part2
+Subtitle: A short subtitle part2
+Author: Jane Reporter part2
+Thumbnail: thumbnails/example.jpg 
 Date: 2026-01-20
 ---
