@@ -1,3 +1,4 @@
+---
 Title: My Headline
 Subtitle: A short subtitle
 Author: Jane Reporter
