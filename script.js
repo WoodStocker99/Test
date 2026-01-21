@@ -147,7 +147,7 @@ async function openArticle(filename, metaAndBody) {
 
     const thumbHtml = meta.Thumbnail ? `<img src="${escapeHtml(meta.Thumbnail)}" alt="${escapeHtml(meta.Title || '')}" style="max-width:100%;border-radius:4px;margin-bottom:12px">` : '';
     const dateStr = meta.Date ? new Date(meta.Date).toLocaleDateString() : '';
-    const metaLine = `${escapeHtml(dateStr)}${dateStr ? ' • ' : ''}${escapeHtml(meta.Author || 'Staff')}`;
+    const metaLine = `${escapeHtml(dateStr)}${dateStr ? ' • ' : ''}${escapeHtml(meta.Author || 'TestAuthor')}`;
 
     const articleBodyHtml = (window.marked && window.DOMPurify) ? renderMarkdownSafe(body) : renderParagraphs(body);
 
