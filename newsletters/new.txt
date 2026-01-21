@@ -1,7 +1,8 @@
 ---
-Title: My Headline
-Subtitle: A short subtitle
-Author: Jane Reporter
+Title: My New and Better Headline
+Subtitle: A Not So short subtitle explainging this article and its thoughts and reasonings
+Author: Jane Good Reporter
 Thumbnail: thumbnails/example.jpg
 Date: 2026-01-20
 ---
+
