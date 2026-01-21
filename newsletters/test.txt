@@ -4,4 +4,3 @@ Subtitle: A short subtitle part2
 Author: Jane Reporter part2
 Thumbnail: thumbnails/example.jpg 
 Date: 2026-01-20
----
