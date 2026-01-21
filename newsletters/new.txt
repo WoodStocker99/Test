@@ -4,5 +4,3 @@ Subtitle: A Not So short subtitle explainging this article and its thoughts and 
 Author: Jane Good Reporter
 Thumbnail: thumbnails/example.jpg
 Date: 2026-01-20
----
-
