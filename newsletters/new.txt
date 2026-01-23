@@ -1,10 +1,10 @@
-;;;
+---
 Title: My New and Better Headline
 Subtitle: A Not So short subtitle explainging this article and its thoughts and reasonings
 Author: Jane Good Reporter
 Thumbnail: thumbnails/example.jpg
 Date: 2026-01-20
-;;;
+---
 
 This is the first paragraph of the article body. It should appear on article.html.
 

@@ -1,10 +1,10 @@
-;;;
+---
 Title: Lorem Ipsum
 Author: Lorem D. Ipsum
 Subtitle: lorem Ipsum
 Thumbnail: thumbnails/example.jpg
 Date: 2026-01-20
-;;;
+---
 
 **Lorem ipsum** dolor sit amet, consectetur adipiscing elit. Morbi maximus lorem vitae dictum aliquam. Sed ornare, mauris sit amet posuere imperdiet, ipsum purus commodo neque, vel posuere arcu metus quis ante. Nulla cursus a est aliquam volutpat. Maecenas sed ligula venenatis arcu aliquam ultricies ut quis justo. Donec euismod ligula ac cursus suscipit. Suspendisse tincidunt blandit nisi, nec blandit enim tincidunt at. Praesent faucibus sollicitudin est sit amet blandit. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Praesent vulputate sed lectus eget blandit. Nulla augue urna, tincidunt sit amet lacinia commodo, auctor et leo. Etiam at quam id nunc scelerisque dignissim in at lorem. Maecenas suscipit dolor eu felis facilisis pellentesque.
 
