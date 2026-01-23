@@ -105,11 +105,11 @@ function renderMarkdownSafe(text) {
 
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
-  // If they wrote "thumbnails/x.jpg", make it "newsletters/thumbnails/x.jpg"
+  // If they wrote "thumbnails/x.jpg", make it "/thumbnails/x.jpg"
   const t = String(thumbValue).trim();
   if (/^(https?:)?\/\//i.test(t) || t.startsWith('/')) return t;
   if (t.startsWith('newsletters/')) return t;
-  if (t.startsWith('thumbnails/')) return t;
+  if (t.startsWith('thumbnails/')) return t);
   return t;
 }
 
