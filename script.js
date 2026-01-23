@@ -118,7 +118,6 @@ function createCard(filename, meta) {
   el.className = 'news-card';
   el.dataset.file = filename;
   el.style.cursor = 'pointer';
-  thumbEl.style.backgroundImage = `url("${encodeURI(resolveThumbPath(meta.Thumbnail))}")`;
 
   const thumbEl = document.createElement('div');
   thumbEl.className = 'news-thumb';
@@ -157,6 +156,9 @@ function renderArticle(container, filename, meta, body) {
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
 
+
+  const thumbUrl = resolveThumbPath(meta.Thumbnail);
+  const thumbAlt = `${title} thumbnail`;
   const bodyHtml =
     (window.marked && window.DOMPurify) ? renderMarkdownSafe(body) : renderParagraphs(body);
 
