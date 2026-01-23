@@ -109,7 +109,7 @@ function resolveThumbPath(thumbValue) {
   const t = String(thumbValue).trim();
   if (/^(https?:)?\/\//i.test(t) || t.startsWith('/')) return t;
   if (t.startsWith('newsletters/')) return t;
-  if (t.startsWith('thumbnails/')) return `${NEWS_DIR}${t}`;
+  if (t.startsWith('thumbnails/')) return t;
   return t;
 }
 
