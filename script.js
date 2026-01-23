@@ -118,6 +118,7 @@ function createCard(filename, meta) {
   el.className = 'news-card';
   el.dataset.file = filename;
   el.style.cursor = 'pointer';
+  thumbEl.style.backgroundImage = `url("${encodeURI(resolveThumbPath(meta.Thumbnail))}")`;
 
   const thumbEl = document.createElement('div');
   thumbEl.className = 'news-thumb';
