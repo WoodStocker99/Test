@@ -1,8 +1,8 @@
-// Unified client script for list view, modal view (legacy), and article page.
-// Hardened and with optional Markdown support.
 
+// script.js — fixed, GitHub Pages friendly
 const MANIFEST = 'newsletters/index.json';
 const NEWS_DIR = 'newsletters/';
+const DEFAULT_THUMB = `${NEWS_DIR}thumbnails/placeholder.png`;
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -16,37 +16,48 @@ function escapeHtml(str) {
 
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') return '';
-  return filename.replace(/\\/g, '/').replace(/(^\/+|\.\.\/+)/g, '').trim();
+  const normalized = filename.replace(/\\/g, '/').trim();
+  // block traversal and absolute paths
+  if (normalized.includes('..') || normalized.startsWith('/')) return '';
+  return normalized;
 }
 
-function renderParagraphs(text) {
-  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
-  return paragraphs.map(p => {
-    const html = escapeHtml(p).replace(/\n/g, '<br>');
-    return `<p>${html}</p>`;
-  }).join('\n');
-}
+function parseFrontmatter(text) {
+  // tolerate BOM + leading whitespace/newlines
+  let src = String(text || '').replace(/\r/g, '');
+  src = src.replace(/^\uFEFF/, '').replace(/^\s+/, '');
 
-function renderMarkdownSafe(text) {
-  if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
-    try {
-      const raw = window.marked.parse(text || '');
-      return window.DOMPurify.sanitize(raw, {ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style']});
-    } catch (e) {
-      console.warn('Markdown render failed, falling back to plain text.', e);
-      return renderParagraphs(text);
-    }
+  if (!src.startsWith('---\n') && src !== '---') {
+    return { meta: {}, body: src.trim() };
   }
-  return renderParagraphs(text);
+
+  const lines = src.split('\n');
+  const meta = {};
+  let i = 1;
+
+  for (; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === '---') {
+      i++;
+      break;
+    }
+    if (!line) continue;
+
+    const m = line.match(/^([^:]+)\s*:\s*(.*)$/);
+    if (m) meta[m[1].trim()] = m[2].trim();
+  }
+
+  const body = lines.slice(i).join('\n').trim();
+  return { meta, body };
 }
 
 async function loadManifest() {
   try {
-    const res = await fetch(MANIFEST);
-    if (!res.ok) throw new Error('Manifest not found');
+    const res = await fetch(MANIFEST, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Manifest not found: ${MANIFEST}`);
     const data = await res.json();
     if (!Array.isArray(data)) return [];
-    return data.filter(item => typeof item === 'string').map(sanitizeFilename);
+    return data.map(sanitizeFilename).filter(Boolean);
   } catch (err) {
     console.warn('Could not load manifest:', err);
     return [];
@@ -56,29 +67,69 @@ async function loadManifest() {
 async function loadNewsletter(filename) {
   const sanitized = sanitizeFilename(filename);
   if (!sanitized) throw new Error('Invalid filename');
-  const path = NEWS_DIR + sanitized;
-  const res = await fetch(path);
+
+  const path = `${NEWS_DIR}${sanitized}`;
+  const res = await fetch(path, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to fetch ${path}`);
+
   const text = await res.text();
   return parseFrontmatter(text);
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString();
+}
+
+function renderParagraphs(text) {
+  const paragraphs = String(text || '')
+    .split(/\n\s*\n/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  return paragraphs
+    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+}
+
+function renderMarkdownSafe(text) {
+  if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
+    const raw = window.marked.parse(String(text || ''));
+    return window.DOMPurify.sanitize(raw, {
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style']
+    });
+  }
+  return renderParagraphs(text);
+}
+
+function resolveThumbPath(thumbValue) {
+  if (!thumbValue) return DEFAULT_THUMB;
+  // If they wrote "thumbnails/x.jpg", make it "newsletters/thumbnails/x.jpg"
+  const t = String(thumbValue).trim();
+  if (/^(https?:)?\/\//i.test(t) || t.startsWith('/')) return t;
+  if (t.startsWith('newsletters/')) return t;
+  if (t.startsWith('thumbnails/')) return `${NEWS_DIR}${t}`;
+  return t;
+}
+
 function createCard(filename, meta) {
-  const thumb = meta.Thumbnail ? escapeHtml(meta.Thumbnail) : 'thumbnails/placeholder.png';
-  const date = meta.Date ? new Date(meta.Date).toLocaleDateString() : '';
   const el = document.createElement('article');
   el.className = 'news-card';
   el.dataset.file = filename;
+  el.style.cursor = 'pointer';
 
   const thumbEl = document.createElement('div');
   thumbEl.className = 'news-thumb';
-  try { thumbEl.style.backgroundImage = `url("${encodeURI(thumb)}")`; } catch(e) { thumbEl.style.backgroundImage = '' }
+  thumbEl.style.backgroundImage = `url("${encodeURI(resolveThumbPath(meta.Thumbnail))}")`;
 
   const bodyEl = document.createElement('div');
   bodyEl.className = 'news-body';
 
   const metaEl = document.createElement('div');
   metaEl.className = 'news-meta';
+  const date = formatDate(meta.Date);
   metaEl.textContent = `${date}${date ? ' • ' : ''}${meta.Author || 'Staff'}`;
 
   const titleEl = document.createElement('h3');
@@ -89,156 +140,90 @@ function createCard(filename, meta) {
   subEl.className = 'news-sub';
   subEl.textContent = meta.Subtitle || '';
 
-  bodyEl.appendChild(metaEl);
-  bodyEl.appendChild(titleEl);
-  bodyEl.appendChild(subEl);
+  bodyEl.append(metaEl, titleEl, subEl);
+  el.append(thumbEl, bodyEl);
 
-  el.appendChild(thumbEl);
-  el.appendChild(bodyEl);
-
-  const isListPage = document.body && document.body.dataset && document.body.dataset.page === 'list';
-  const hasModal = !!document.getElementById('article-view');
-  if (isListPage) {
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', () => {
-      location.href = `article.html?article=${encodeURIComponent(sanitizeFilename(filename))}`;
-    });
-  } else if (hasModal) {
-    el.addEventListener('click', () => openArticle(filename, meta));
-  } else {
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', () => {
-      location.href = `article.html?article=${encodeURIComponent(sanitizeFilename(filename))}`;
-    });
-  }
+  el.addEventListener('click', () => {
+    location.href = `article.html?article=${encodeURIComponent(filename)}`;
+  });
 
   return el;
 }
 
-async function openArticle(filename, metaAndBody) {
-  const aside = document.getElementById('article-view');
-  const content = document.getElementById('article-content');
-  const isModal = !!aside && content && aside.contains(content);
+function renderArticle(container, filename, meta, body) {
+  const title = meta.Title || filename;
+  const subtitle = meta.Subtitle || '';
+  const date = formatDate(meta.Date);
+  const author = meta.Author || 'Staff';
+  const metaLine = `${date}${date ? ' • ' : ''}${author}`;
 
-  let prevFocus;
-  let cleanup = () => {};
-  if (isModal) {
-    prevFocus = document.activeElement;
-    const closeBtn = document.getElementById('close-article');
-    if (closeBtn) closeBtn.focus();
+  const bodyHtml =
+    (window.marked && window.DOMPurify) ? renderMarkdownSafe(body) : renderParagraphs(body);
 
-    function onKey(e) {
-      if (e.key === 'Escape') closeArticle();
-    }
-    document.addEventListener('keydown', onKey);
-    cleanup = () => {
-      document.removeEventListener('keydown', onKey);
-      if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
-    };
-  }
+  container.innerHTML = `
+    <h1>${escapeHtml(title)}</h1>
+    ${subtitle ? `<p class="lead">${escapeHtml(subtitle)}</p>` : ''}
+    <p class="news-meta">${escapeHtml(metaLine)}</p>
+    <hr />
+    ${bodyHtml}
+  `;
 
-  const doRender = async () => {
-    let meta = {};
-    let body = '';
-    if (typeof metaAndBody === 'string') {
-      try { const parsed = await loadNewsletter(metaAndBody); meta = parsed.meta; body = parsed.body; } catch (e) { meta = {}; body = ''; }
-    } else if (metaAndBody && metaAndBody.meta) { meta = metaAndBody.meta; body = metaAndBody.body || ''; }
-    else if (metaAndBody && typeof metaAndBody === 'object') { meta = metaAndBody; }
-
-    const thumbHtml = meta.Thumbnail ? `<img src="${escapeHtml(meta.Thumbnail)}" alt="${escapeHtml(meta.Title || '')}" style="max-width:100%;border-radius:4px;margin-bottom:12px">` : '';
-    const dateStr = meta.Date ? new Date(meta.Date).toLocaleDateString() : '';
-    const metaLine = `${escapeHtml(dateStr)}${dateStr ? ' • ' : ''}${escapeHtml(meta.Author || 'TestAuthor')}`;
-
-    const articleBodyHtml = (window.marked && window.DOMPurify) ? renderMarkdownSafe(body) : renderParagraphs(body);
-
-    const html = `
-      ${thumbHtml}
-      <h1>${escapeHtml(meta.Title || filename)}</h1>
-      <div class="lead">${escapeHtml(meta.Subtitle || '')}</div>
-      <div class="news-meta" style="margin-top:8px">${metaLine}</div>
-      <hr>
-      <div class="article-body">${articleBodyHtml}</div>
-    `;
-
-    if (isModal) {
-      content.innerHTML = html;
-      aside.hidden = false;
-      history.replaceState(null, '', `?article=${encodeURIComponent(sanitizeFilename(filename))}`);
-      const closeBtn = document.getElementById('close-article');
-      if (closeBtn) closeBtn.addEventListener('click', () => { cleanup(); }, { once: true });
-    } else if (content) {
-      content.innerHTML = html;
-      document.title = `${meta.Title ? meta.Title + ' — ' : ''}The Gazette`;
-      const base = location.pathname.endsWith('article.html') ? 'article.html' : location.pathname;
-      history.replaceState(null, '', `${base}?article=${encodeURIComponent(sanitizeFilename(filename))}`);
-    } else {
-      location.href = `article.html?article=${encodeURIComponent(sanitizeFilename(filename))}`;
-    }
-  };
-
-  await doRender();
+  document.title = `${title} — The Gazette`;
 }
 
-function closeArticle() {
-  const aside = document.getElementById('article-view');
-  if (aside) aside.hidden = true;
-  history.replaceState(null, '', '/');
-}
-
-function parseFrontmatter(text) {
-  text = text.replace(/\r/g, '');
-  if (!text.startsWith('---')) {
-    return { meta: {}, body: text.trim() };
-  }
-  const parts = text.split('\n');
-  let i = 1;
-  const meta = {};
-  for (; i < parts.length; i++) {
-    const line = parts[i].trim();
-    if (line === '---') { i++; break; }
-    if (!line) continue;
-    const m = line.match(/^([^:]+)\s*:\s*(.*)$/);
-    if (m) meta[m[1].trim()] = m[2].trim();
-  }
-  const body = parts.slice(i).join('\n').trim();
-  return { meta, body };
-}
-
-async function init() {
+async function initListPage() {
   const newsListEl = document.getElementById('news-list');
+  if (!newsListEl) return;
+
   const manifest = await loadManifest();
+  if (!manifest.length) {
+    newsListEl.innerHTML = `<p>No newsletters found.</p>`;
+    return;
+  }
 
-  if (newsListEl) {
-    const manifestToUse = manifest;
-    if (!manifestToUse.length) {
-      newsListEl.innerHTML = '<p>No newsletters found. Add .txt files to newsletters/ and list them in newsletters/index.json.</p>';
-    } else {
-      const promises = manifestToUse.map(async (f) => {
-        try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta, body: parsed.body }; }
-        catch (err) { console.warn('Skip', f, err); return null; }
-      });
-      const results = (await Promise.all(promises)).filter(Boolean);
-
-      results.sort((a,b) => {
-        if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
-        return a.file.localeCompare(b.file);
-      });
-
-      for (const r of results) {
-        const card = createCard(r.file, r.meta);
-        newsListEl.appendChild(card);
+  const results = (await Promise.all(
+    manifest.map(async f => {
+      try {
+        const parsed = await loadNewsletter(f);
+        return { file: f, meta: parsed.meta, body: parsed.body };
+      } catch (e) {
+        console.warn('Skipping', f, e);
+        return null;
       }
-    }
-  }
+    })
+  )).filter(Boolean);
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const q = urlParams.get('article');
-  if (q) {
-    openArticle(q);
-  }
+  results.sort((a, b) => {
+    if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
+    return a.file.localeCompare(b.file);
+  });
 
-  const closeBtn = document.getElementById('close-article');
-  if (closeBtn) closeBtn.addEventListener('click', closeArticle);
+  for (const r of results) {
+    newsListEl.appendChild(createCard(r.file, r.meta));
+  }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+async function initArticlePage() {
+  const content = document.getElementById('article-content');
+  if (!content) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const file = sanitizeFilename(params.get('article'));
+  if (!file) {
+    content.innerHTML = `<p>Missing or invalid article parameter.</p>`;
+    return;
+  }
+
+  try {
+    const parsed = await loadNewsletter(file);
+    renderArticle(content, file, parsed.meta, parsed.body);
+  } catch (e) {
+    console.error(e);
+    content.innerHTML = `<p>Could not load article: <strong>${escapeHtml(file)}</strong></p>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await initListPage();
+  await initArticlePage();
+});
