@@ -1,4 +1,4 @@
-
+---
 Title: My New and Better Headline
 Subtitle: A Not So short subtitle explainging this article and its thoughts and reasonings
 Author: Jane Good Reporter
@@ -11,3 +11,4 @@ This is the first paragraph of the article body.
 This is the second paragraph. You can add more paragraphs by leaving a blank line between them.
 
 - If you include marked + DOMPurify (you do in article.html), you can also use Markdown lists like this.
+
