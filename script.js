@@ -1,8 +1,8 @@
 
 // script.js — fixed, GitHub Pages friendly
-const MANIFEST = '/newsletters/index.json';
-const NEWS_DIR = '/newsletters/';
-const DEFAULT_THUMB = `/thumbnails/placeholder.png`;
+const MANIFEST = 'newsletters/index.json';
+const NEWS_DIR = 'newsletters/';
+const DEFAULT_THUMB = `thumbnails/placeholder.png`;
 
 function escapeHtml(str) {
   if (str == null) return '';
