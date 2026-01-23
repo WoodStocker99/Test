@@ -149,6 +149,7 @@ function createCard(filename, meta) {
   return el;
 }
 
+
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
   const subtitle = meta.Subtitle || '';
@@ -156,17 +157,30 @@ function renderArticle(container, filename, meta, body) {
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
 
-
+  // ✅ NEW: resolve a usable thumbnail URL (or fall back to placeholder)
   const thumbUrl = resolveThumbPath(meta.Thumbnail);
   const thumbAlt = `${title} thumbnail`;
-  const bodyHtml =
-    (window.marked && window.DOMPurify) ? renderMarkdownSafe(body) : renderParagraphs(body);
+
+  const bodyHtml = (window.marked && window.DOMPurify)
+    ? renderMarkdownSafe(body)
+    : renderParagraphs(body);
 
   container.innerHTML = `
+    ${thumbUrl ? `
+      <img
+        class="article-thumb"
+        src="${encodeURI(thumbUrl)}"
+        alt="${escapeHtml(thumbAlt)}"
+        loading="lazy"
+      />
+    ` : ''}
+
     <h1>${escapeHtml(title)}</h1>
     ${subtitle ? `<p class="lead">${escapeHtml(subtitle)}</p>` : ''}
     <p class="news-meta">${escapeHtml(metaLine)}</p>
+
     <hr />
+
     ${bodyHtml}
   `;
 
