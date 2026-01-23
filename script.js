@@ -26,7 +26,7 @@ function parseFrontmatter(text) {
   let src = String(text || '').replace(/\r/g, '');
   src = src.replace(/^\uFEFF/, '').replace(/^\s+/, '');
 
-  if (!src.startsWith(';;;\n') && src !== '---') {
+  if (!src.startsWith(';;;\n') && src !== ';;;') {
     return { meta: {}, body: src.trim() };
   }
 
