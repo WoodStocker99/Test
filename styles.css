@@ -111,3 +111,14 @@ body{
   .news-list{grid-template-columns: 1fr 1fr;align-items:start}
   .news-card{align-items:stretch}
 }
+
+/* Center the Featured Article card on the homepage */
+#featured-article {
+  display: flex;            /* override the grid behavior used by .news-list */
+  justify-content: center;  /* center horizontally */
+}
+
+#featured-article .news-card {
+  width: 100%;
+  max-width: 900px;         /* choose a size you like (700–1000px works well) */
+}
