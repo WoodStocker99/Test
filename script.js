@@ -149,6 +149,53 @@ function createCard(filename, meta) {
   return el;
 }
 
+async function initFeaturedArticle() {
+  const featuredEl = document.getElementById('featured-article');
+  if (!featuredEl) return;
+
+  const manifest = await loadManifest();
+  if (!manifest.length) {
+    featuredEl.innerHTML = `<p>No newsletters found.</p>`;
+    return;
+  }
+
+  // Load all meta (could be optimized later, but fine for small lists)
+  const results = (await Promise.all(
+    manifest.map(async (f) => {
+      try {
+        const parsed = await loadNewsletter(f);
+        return { file: f, meta: parsed.meta };
+      } catch (e) {
+        console.warn('Skipping', f, e);
+        return null;
+      }
+    })
+  )).filter(Boolean);
+
+  if (!results.length) {
+    featuredEl.innerHTML = `<p>No readable newsletters found.</p>`;
+    return;
+  }
+
+  // Sort newest-first using meta.Date when available, fallback to filename
+  results.sort((a, b) => {
+    const ad = a.meta.Date ? new Date(a.meta.Date) : null;
+    const bd = b.meta.Date ? new Date(b.meta.Date) : null;
+    const aOk = ad && !Number.isNaN(ad.getTime());
+    const bOk = bd && !Number.isNaN(bd.getTime());
+
+    if (aOk && bOk) return bd - ad;
+    if (aOk) return -1;
+    if (bOk) return 1;
+    return b.file.localeCompare(a.file);
+  });
+
+  const newest = results[0];
+
+  // Reuse your existing card renderer
+  featuredEl.innerHTML = '';
+  featuredEl.appendChild(createCard(newest.file, newest.meta));
+}
 
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
@@ -240,6 +287,7 @@ async function initArticlePage() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initFeaturedArticle();
   await initListPage();
   await initArticlePage();
 });
