@@ -122,3 +122,19 @@ body{
   width: 100%;
   max-width: 900px;         /* choose a size you like (700–1000px works well) */
 }
+
+/* Article thumbnail + any images inside article content */
+.article-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;          /* keep aspect ratio */
+  margin: 0 auto 1rem;   /* center and add spacing */
+  border-radius: 8px;
+}
+
+/* If the first image is the "thumbnail", constrain its height */
+.article-content img:first-of-type {
+  max-height: 320px;     /* adjust (240–360px usually feels right) */
+  width: 100%;
+  object-fit: cover;     /* fills the width while cropping nicely */
+}
