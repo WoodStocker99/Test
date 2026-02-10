@@ -1,6 +1,6 @@
 // script.js — manifest-driven newsletter loader + safe article rendering
-// Works with local thumbnails (e.g., thumbnails/foo.jpg) and external URLs.
-// Keeps hidden (unlisted) behavior for newsletters.html via frontmatter Hidden: true.
+// Works with local thumbnails (thumbnails/foo.jpg) and external URLs.
+// Hides items with Hidden: true from the newsletters list and from the Featured block.
 
 // ---- Paths ----
 const MANIFEST = 'newsletters/index.json';
@@ -97,8 +97,6 @@ function renderParagraphs(text) {
 }
 
 function renderMarkdownSafe(text) {
-  // On article.html & newsletters.html, you include marked + DOMPurify via CDN.
-  // We will use them if present, otherwise fall back to paragraph rendering.
   if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
     const raw = window.marked.parse(String(text ?? ''));
     return window.DOMPurify.sanitize(raw, {
@@ -109,27 +107,13 @@ function renderMarkdownSafe(text) {
 }
 
 // ---- Thumbnail path resolver ----
-// Accepts:
-//  - External URLs: http://..., https://..., protocol-relative //...  (kept as-is)
-//  - Root-relative: /assets/...                                (kept as-is)
-//  - Local project paths: thumbnails/..., newsletters/...       (kept as-is)
-//  - Empty/missing -> DEFAULT_THUMB
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
-
   const t = String(thumbValue).trim();
-
-  // External URL (http, https) or protocol-relative (//cdn.example.com/img.jpg)
-  if (/^(https?:)?\/\//i.test(t)) return t;
-
-  // Root-relative
-  if (t.startsWith('/')) return t;
-
-  // Known local folders commonly used in this project
-  if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t;
-
-  // Otherwise, treat as a relative path as given
-  return t;
+  if (/^(https?:)?\/\//i.test(t)) return t;  // external or protocol-relative
+  if (t.startsWith('/')) return t;           // root-relative
+  if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t; // local known
+  return t; // other relative paths
 }
 
 // ---- Card rendering for lists/featured ----
@@ -171,7 +155,15 @@ function createCard(filename, meta) {
   return el;
 }
 
-// ---- Homepage Featured (unchanged) ----
+// ---- Soft-hide helpers ----
+function isTruthy(val) {
+  if (val === true) return true;
+  if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
+  if (typeof val === 'number') return val !== 0;
+  return false;
+}
+
+// ---- Homepage Featured (now excludes Hidden) ----
 async function initFeaturedArticle() {
   const featuredEl = document.getElementById('featured-article');
   if (!featuredEl) return;
@@ -189,13 +181,15 @@ async function initFeaturedArticle() {
     })
   )).filter(Boolean);
 
-  if (!results.length) {
-    featuredEl.innerHTML = `<p class="news-meta">No readable newsletters found.</p>`;
+  // ✅ Exclude Hidden (and optionally Draft)
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
+
+  if (!visible.length) {
+    featuredEl.innerHTML = `<p class="news-meta">No visible newsletters found.</p>`;
     return;
   }
 
-  // newest-first by Date, fallback filename
-  results.sort((a, b) => {
+  visible.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
     const aOk = ad && !Number.isNaN(ad.getTime());
@@ -207,10 +201,10 @@ async function initFeaturedArticle() {
   });
 
   featuredEl.innerHTML = '';
-  featuredEl.appendChild(createCard(results[0].file, results[0].meta));
+  featuredEl.appendChild(createCard(visible[0].file, visible[0].meta));
 }
 
-// ---- Article renderer ----
+// ---- Article render ----
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
   const subtitle = meta.Subtitle || '';
@@ -237,14 +231,7 @@ function renderArticle(container, filename, meta, body) {
   document.title = `${title} — The Gazette`;
 }
 
-// ---- Newsletters list (hide items with Hidden: true) ----
-function isTruthy(val) {
-  if (val === true) return true;
-  if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
-  if (typeof val === 'number') return val !== 0;
-  return false;
-}
-
+// ---- Newsletters list (excludes Hidden) ----
 async function initListPage() {
   const newsListEl = document.getElementById('news-list');
   if (!newsListEl) return;
@@ -262,8 +249,7 @@ async function initListPage() {
     })
   )).filter(Boolean);
 
-  // Filter out hidden items (list page only)
-  const visible = results.filter(r => !isTruthy(r.meta.Hidden));
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
 
   if (!visible.length) {
     newsListEl.innerHTML = `<p class="news-meta">No newsletters to display.</p>`;
