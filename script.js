@@ -11,13 +11,12 @@ const DEFAULT_THUMB = 'thumbnails/placeholder.png';
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/'/g, '&#39;');
 }
-
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') return '';
   const normalized = filename.replace(/\\/g, '/').trim();
@@ -32,13 +31,11 @@ function sanitizeFilename(filename) {
   }
   return normalized || '';
 }
-
 function parseFrontmatter(text) {
   let src = String(text ?? '')
-    .replace(/\r/g, '')      // CRLF -> LF
-    .replace(/^\uFEFF/, '')  // strip BOM
-    .replace(/^\s+/, '');    // tolerate leading whitespace
-
+    .replace(/\r/g, '') // CRLF -> LF
+    .replace(/^\uFEFF/, '') // strip BOM
+    .replace(/^\s+/, ''); // tolerate leading whitespace
   if (!src.startsWith('---\n') && src !== '---') {
     return { meta: {}, body: src.trim() };
   }
@@ -55,7 +52,6 @@ function parseFrontmatter(text) {
   const body = lines.slice(i).join('\n').trim();
   return { meta, body };
 }
-
 async function loadManifest() {
   try {
     const res = await fetch(MANIFEST, { cache: 'no-store' });
@@ -68,7 +64,6 @@ async function loadManifest() {
     return [];
   }
 }
-
 async function loadNewsletter(filename) {
   const sanitized = sanitizeFilename(filename);
   if (!sanitized) throw new Error('Invalid filename');
@@ -78,14 +73,12 @@ async function loadNewsletter(filename) {
   const text = await res.text();
   return parseFrontmatter(text);
 }
-
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString();
 }
-
 function renderParagraphs(text) {
   const paragraphs = String(text ?? '')
     .split(/\n\s*\n/)
@@ -95,7 +88,6 @@ function renderParagraphs(text) {
     .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
     .join('\n');
 }
-
 function renderMarkdownSafe(text) {
   if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
     const raw = window.marked.parse(String(text ?? ''));
@@ -105,17 +97,15 @@ function renderMarkdownSafe(text) {
   }
   return renderParagraphs(text);
 }
-
 // ---- Thumbnail path resolver ----
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
   const t = String(thumbValue).trim();
-  if (/^(https?:)?\/\//i.test(t)) return t;  // external or protocol-relative
-  if (t.startsWith('/')) return t;           // root-relative
+  if (/^(https?:)?\/\//i.test(t)) return t; // external or protocol-relative
+  if (t.startsWith('/')) return t; // root-relative
   if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t; // local known
   return t; // other relative paths
 }
-
 // ---- Card rendering for lists/featured ----
 function createCard(filename, meta) {
   const el = document.createElement('article');
@@ -154,7 +144,6 @@ function createCard(filename, meta) {
 
   return el;
 }
-
 // ---- Soft-hide helpers ----
 function isTruthy(val) {
   if (val === true) return true;
@@ -162,18 +151,15 @@ function isTruthy(val) {
   if (typeof val === 'number') return val !== 0;
   return false;
 }
-
 // ---- Homepage Featured (now excludes Hidden) ----
 async function initFeaturedArticle() {
   const featuredEl = document.getElementById('featured-article');
   if (!featuredEl) return;
-
   const manifest = await loadManifest();
   if (!manifest.length) {
     featuredEl.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
     return;
   }
-
   const results = (await Promise.all(
     manifest.map(async (f) => {
       try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
@@ -181,29 +167,53 @@ async function initFeaturedArticle() {
     })
   )).filter(Boolean);
 
-  // ✅ Exclude Hidden (and optionally Draft)
   const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
-
   if (!visible.length) {
     featuredEl.innerHTML = `<p class="news-meta">No visible newsletters found.</p>`;
     return;
   }
-
   visible.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
     const aOk = ad && !Number.isNaN(ad.getTime());
-    const bOk = bd && !Number.isNaN(bd.getTime());
+    const bOk = bd && !Number.isNaN(b.getTime?.() ?? bd.getTime());
     if (aOk && bOk) return bd - ad;
     if (aOk) return -1;
     if (bOk) return 1;
     return b.file.localeCompare(a.file);
   });
-
   featuredEl.innerHTML = '';
   featuredEl.appendChild(createCard(visible[0].file, visible[0].meta));
 }
+// ---- Newsletters list (excludes Hidden) ----
+async function initListPage() {
+  const newsListEl = document.getElementById('news-list');
+  if (!newsListEl) return;
+  const manifest = await loadManifest();
+  if (!manifest.length) {
+    newsListEl.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
+    return;
+  }
+  const results = (await Promise.all(
+    manifest.map(async (f) => {
+      try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
+      catch (e) { console.warn('Skipping', f, e); return null; }
+    })
+  )).filter(Boolean);
 
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
+  if (!visible.length) {
+    newsListEl.innerHTML = `<p class="news-meta">No newsletters to display.</p>`;
+    return;
+  }
+  visible.sort((a, b) => {
+    if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
+    return a.file.localeCompare(b.file);
+  });
+  for (const r of visible) {
+    newsListEl.appendChild(createCard(r.file, r.meta));
+  }
+}
 // ---- Article render ----
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
@@ -211,13 +221,11 @@ function renderArticle(container, filename, meta, body) {
   const date = formatDate(meta.Date);
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
-
   const thumbUrl = resolveThumbPath(meta.Thumbnail);
   const thumbAlt = `${title} thumbnail`;
   const thumbHtml = thumbUrl
-    ? `${escapeHtml(encodeURI(thumbUrl))}`
+    ? `<img src="${escapeHtml(encodeURI(thumbUrl))}" alt="${escapeHtml(thumbAlt)}" class="article-thumb">`
     : '';
-
   const bodyHtml = renderMarkdownSafe(body);
 
   container.innerHTML = `
@@ -227,50 +235,12 @@ function renderArticle(container, filename, meta, body) {
     <p class="news-meta">${escapeHtml(metaLine)}</p>
     <div class="article-body">${bodyHtml}</div>
   `;
-
-  document.title = `${title} — The Gazette`;
+  document.title = `${title} — Sleepy Hollow Media`;
 }
-
-// ---- Newsletters list (excludes Hidden) ----
-async function initListPage() {
-  const newsListEl = document.getElementById('news-list');
-  if (!newsListEl) return;
-
-  const manifest = await loadManifest();
-  if (!manifest.length) {
-    newsListEl.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
-    return;
-  }
-
-  const results = (await Promise.all(
-    manifest.map(async (f) => {
-      try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
-      catch (e) { console.warn('Skipping', f, e); return null; }
-    })
-  )).filter(Boolean);
-
-  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
-
-  if (!visible.length) {
-    newsListEl.innerHTML = `<p class="news-meta">No newsletters to display.</p>`;
-    return;
-  }
-
-  visible.sort((a, b) => {
-    if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
-    return a.file.localeCompare(b.file);
-  });
-
-  for (const r of visible) {
-    newsListEl.appendChild(createCard(r.file, r.meta));
-  }
-}
-
 // ---- Article bootstrap ----
 async function initArticlePage() {
   const content = document.getElementById('article-content');
   if (!content) return;
-
   const params = new URLSearchParams(window.location.search);
   const file = sanitizeFilename(params.get('article'));
   if (!file) {
@@ -291,4 +261,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initFeaturedArticle();
   await initListPage();
   await initArticlePage();
+
+  // --- Sleepy Hollow mobile menu toggle ---
+  const toggle = document.querySelector('.sh-nav-toggle');
+  const menu = document.getElementById('sh-mobile-menu');
+  if (toggle && menu) {
+    toggle.addEventListener('click', () => {
+      const isOpen = menu.classList.toggle('active');
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
 });

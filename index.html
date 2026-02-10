@@ -3,88 +3,86 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>The Gazette — Home</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>Sleepy Hollow Media — Home</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="/favicon.ico" />
+  <!-- Optional Google Fonts (can be removed if you prefer system fonts)
+       You can self-host later for performance. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
-<header class="site-header">
-  <div class="container header-row">
 
-    <div class="masthead">
-      <h1 class="site-title">The Gazette</h1>
-      <p class="tagline">Daily bulletins & newsletters</p>
-    </div>
-
-    <nav class="site-nav" aria-label="Main">
-      <a href="newsletters.html" class="button"
-        style="padding:.5rem 1rem;border-radius:6px;background:#b91c1c;color:#fff;text-decoration:none;">
-        Newsletters
+  <!-- Site Header -->
+  <header class="sh-header" role="banner">
+    <div class="sh-container sh-header-row">
+      <a class="sh-logo" href="index.html" aria-label="Sleepy Hollow Media — Home">
+        <span class="sh-logo-mark" aria-hidden="true">🕯️</span>
+        <span class="sh-site-title">Sleepy Hollow Media</span>
       </a>
-    </nav>
 
-  </div>
-</header>
+      <nav class="sh-nav" aria-label="Main Navigation">
+        <a href="index.html">Home</a>
+        <a href="newsletters.html">Newsletters</a>
+        <a href="#categories" class="sh-nav-disabled" aria-disabled="true" title="Coming soon">Categories</a>
+        <a href="#search" class="sh-nav-disabled" aria-disabled="true" title="Coming soon">Search</a>
+      </nav>
 
-<main class="container" id="main">
-
-  <!-- HERO SECTION -->
-  <section class="hero" style="padding:3rem 0;text-align:center;max-width:750px;margin:0 auto;">
-    <h2 style="font-size:2.1rem;margin-bottom:0.5rem;">Welcome to The Gazette</h2>
-    <p style="color:var(--muted);max-width:600px;margin:0 auto 1.5rem;">
-      Your source for curated daily bulletins, special reports, and community newsletters —
-      all in one place.
-    </p>
-
-
-  </section>
-
-  <!-- FEATURED ARTICLE SECTION -->
-  <section class="featured" aria-labelledby="featured-heading"
-           style="padding:3rem 0;text-align:center;">
-    <h2 id="featured-heading"
-        style="font-size:1.7rem;margin-bottom:1.5rem;font-family:Georgia,serif;">
-      Featured Article
-    </h2>
-
-    <!-- Where script.js injects the newest article card -->
-    <div id="featured-article" class="news-list" style="margin-bottom:1.5rem;"></div>
-
-    <a href="newsletters.html" class="button"
-       style="padding:.65rem 1.2rem;border-radius:6px;background:#b91c1c;color:#fff;text-decoration:none;">
-      View All Newsletters
-    </a>
-  </section>
-  
-  <!-- QUICK HIGHLIGHTS SECTION -->
-  <section style="padding:2rem 0;margin-top:1rem;text-align:center;">
-    <h2 style="font-size:1.6rem;margin-bottom:1.2rem;font-family:Georgia,serif;">Today’s Highlights</h2>
-
-    <div style="max-width:900px;margin:0 auto;color:var(--muted);font-size:1rem;line-height:1.65;">
-      <p>• Stay updated with our latest daily briefings and opinion columns.</p>
-      <p>• Explore archived newsletters covering local affairs, national stories, and special features.</p>
-      <p>• Learn more about the authors shaping our editorial coverage.</p>
+      <button class="sh-nav-toggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="sh-mobile-menu">
+        ☰
+      </button>
     </div>
-  </section>
 
-  <!-- ABOUT THE GAZETTE SECTION -->
-  <section style="padding:3rem 0;text-align:center;max-width:800px;margin:0 auto;">
-    <h2 style="font-family:Georgia,serif;font-size:1.5rem;margin-bottom:0.7rem;">About The Gazette</h2>
-    <p style="color:var(--muted);line-height:1.7;">
-      The Gazette is an independent bulletin and newsletter publication designed to bring
-      timely updates, thoughtful commentary, and curated stories directly to our readers.
-      We strive to maintain clarity, depth, and accessibility in every edition.
-    </p>
-  </section>
+    <div id="sh-mobile-menu" class="sh-mobile-menu" role="navigation" aria-label="Mobile Navigation">
+      <a href="index.html">Home</a>
+      <a href="newsletters.html">Newsletters</a>
+      <a href="#categories" aria-disabled="true" class="sh-nav-disabled">Categories (soon)</a>
+      <a href="#search" aria-disabled="true" class="sh-nav-disabled">Search (soon)</a>
+    </div>
+  </header>
 
-</main>
+  <main class="container" id="main">
+    <!-- HERO SECTION (visual overhaul will come in Step 2) -->
+    <section class="hero" style="padding:3rem 0;text-align:center;max-width:750px;margin:0 auto;">
+      <h2 style="font-size:2.1rem;margin-bottom:0.5rem;">Welcome to Sleepy Hollow Media</h2>
+      <p style="color:var(--muted);max-width:600px;margin:0 auto 1.5rem;">
+        Curated bulletins, special reports, and community newsletters — with a calm, twilight aesthetic.
+      </p>
+    </section>
 
-<footer class="site-footer">
-  <div class="container">
-    <small>© The Gazette</small>
-  </div>
-</footer>
+    <!-- FEATURED ARTICLE SECTION -->
+    <section class="featured" aria-labelledby="featured-heading" style="padding:3rem 0;text-align:center;">
+      <h2 id="featured-heading" style="font-size:1.7rem;margin-bottom:1.5rem;font-family:Georgia,serif;">
+        Featured Article
+      </h2>
+      <div id="featured-article" class="news-list" style="margin-bottom:1.5rem;"></div>
+      <a href="newsletters.html" class="button">
+        View All Newsletters
+      </a>
+    </section>
 
-<script src="script.js" type="module"></script>
+    <!-- QUICK HIGHLIGHTS SECTION -->
+    <section style="padding:2rem 0;margin-top:1rem;text-align:center;">
+      <h2 style="font-size:1.6rem;margin-bottom:1.2rem;font-family:Georgia,serif;">Today’s Highlights</h2>
+      <div style="max-width:900px;margin:0 auto;color:var(--muted);font-size:1rem;line-height:1.65;">
+        <p>• Stay updated with our latest daily briefings and opinion columns.</p>
+        <p>• Explore archived newsletters covering local affairs, national stories, and special features.</p>
+        <p>• Learn more about the authors shaping our editorial coverage.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>© <span id="year"></span> Sleepy Hollow Media</small>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js" crossorigin="anonymous"></script>
+  <script src="script.js" type="module"></script>
+  <script>
+    // Simple year stamp
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>

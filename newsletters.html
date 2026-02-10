@@ -1,22 +1,40 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <link rel="icon" href="/Test/favicon.ico">
+  <link rel="icon" href="/favicon.ico">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>The Gazette — Newsletters</title>
+  <title>Sleepy Hollow Media — Newsletters</title>
   <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body data-page="list">
-  <header class="site-header">
-    <div class="container header-row">
-      <div class="masthead">
-        <h1 class="site-title">The Gazette</h1>
-        <p class="tagline">Daily bulletins &amp; newsletters</p>
-      </div>
-      <nav class="site-nav" aria-label="Main">
-        <a href="/Test" class="button" style="padding:.5rem 1rem;border-radius:3px;background:#b91c1c;color:#fff;text-decoration:none">Home</a>
+
+  <!-- Site Header -->
+  <header class="sh-header" role="banner">
+    <div class="sh-container sh-header-row">
+      <a class="sh-logo" href="index.html" aria-label="Sleepy Hollow Media — Home">
+        <span class="sh-logo-mark" aria-hidden="true">🕯️</span>
+        <span class="sh-site-title">Sleepy Hollow Media</span>
+      </a>
+
+      <nav class="sh-nav" aria-label="Main Navigation">
+        <a href="index.html">Home</a>
+        <a href="newsletters.html" aria-current="page">Newsletters</a>
+        <a href="#categories" class="sh-nav-disabled" aria-disabled="true" title="Coming soon">Categories</a>
+        <a href="#search" class="sh-nav-disabled" aria-disabled="true" title="Coming soon">Search</a>
       </nav>
+
+      <button class="sh-nav-toggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="sh-mobile-menu">
+        ☰
+      </button>
+    </div>
+
+    <div id="sh-mobile-menu" class="sh-mobile-menu" role="navigation" aria-label="Mobile Navigation">
+      <a href="index.html">Home</a>
+      <a href="newsletters.html" aria-current="page">Newsletters</a>
+      <a href="#categories" aria-disabled="true" class="sh-nav-disabled">Categories (soon)</a>
+      <a href="#search" aria-disabled="true" class="sh-nav-disabled">Search (soon)</a>
     </div>
   </header>
 
@@ -26,16 +44,19 @@
       <div id="news-list" class="news-list"></div>
     </section>
   </main>
-  
+
   <footer class="site-footer">
     <div class="container">
-      <small>© The Gazette</small>
+      <small>© <span id="year"></span> Sleepy Hollow Media</small>
     </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js" crossorigin="anonymous"></script>
-  
-<script src="script.js?v=12" type="module"></script>
+  <script src="script.js?v=13" type="module"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>
+``
