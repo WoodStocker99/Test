@@ -1,10 +1,13 @@
 // script.js — manifest-driven newsletter loader + safe article rendering
-// Paths and conventions match your repo structure.
+// Works with local thumbnails (e.g., thumbnails/foo.jpg) and external URLs.
+// Keeps hidden (unlisted) behavior for newsletters.html via frontmatter Hidden: true.
+
+// ---- Paths ----
 const MANIFEST = 'newsletters/index.json';
 const NEWS_DIR = 'newsletters/';
 const DEFAULT_THUMB = 'thumbnails/placeholder.png';
 
-/** Basic HTML escaping for text content inserted via template strings. */
+// ---- Utils ----
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -15,14 +18,10 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * Only allow safe, repo-local filenames:
- * - blocks traversal (".."), absolute paths ("/"), and external URLs.
- * - normalizes backslashes
- */
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') return '';
   const normalized = filename.replace(/\\/g, '/').trim();
+  // block traversal, absolute paths, and external URLs for filenames taken from URL query
   if (
     normalized.includes('..') ||
     normalized.startsWith('/') ||
@@ -34,19 +33,11 @@ function sanitizeFilename(filename) {
   return normalized || '';
 }
 
-/**
- * Parses simple frontmatter:
- * ---
- * Key: Value
- * ...
- * ---
- * Body...
- */
 function parseFrontmatter(text) {
   let src = String(text ?? '')
     .replace(/\r/g, '')      // CRLF -> LF
     .replace(/^\uFEFF/, '')  // strip BOM
-    .replace(/^\s+/, '');    // allow leading whitespace
+    .replace(/^\s+/, '');    // tolerate leading whitespace
 
   if (!src.startsWith('---\n') && src !== '---') {
     return { meta: {}, body: src.trim() };
@@ -105,31 +96,43 @@ function renderParagraphs(text) {
     .join('\n');
 }
 
-/**
- * Markdown rendering:
- * - If marked + DOMPurify are available (on article/newsletters pages), use them.
- * - Otherwise fallback to basic paragraphs.
- */
 function renderMarkdownSafe(text) {
+  // On article.html & newsletters.html, you include marked + DOMPurify via CDN.
+  // We will use them if present, otherwise fall back to paragraph rendering.
   if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
     const raw = window.marked.parse(String(text ?? ''));
     return window.DOMPurify.sanitize(raw, {
-      // keep this conservative
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'], // conservative
     });
   }
   return renderParagraphs(text);
 }
 
+// ---- Thumbnail path resolver ----
+// Accepts:
+//  - External URLs: http://..., https://..., protocol-relative //...  (kept as-is)
+//  - Root-relative: /assets/...                                (kept as-is)
+//  - Local project paths: thumbnails/..., newsletters/...       (kept as-is)
+//  - Empty/missing -> DEFAULT_THUMB
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
+
   const t = String(thumbValue).trim();
-  if (/^(https?:)?\/\//i.test(t) || t.startsWith('/')) return t;
-  if (t.startsWith('newsletters/')) return t;
-  if (t.startsWith('thumbnails/')) return t;
+
+  // External URL (http, https) or protocol-relative (//cdn.example.com/img.jpg)
+  if (/^(https?:)?\/\//i.test(t)) return t;
+
+  // Root-relative
+  if (t.startsWith('/')) return t;
+
+  // Known local folders commonly used in this project
+  if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t;
+
+  // Otherwise, treat as a relative path as given
   return t;
 }
 
+// ---- Card rendering for lists/featured ----
 function createCard(filename, meta) {
   const el = document.createElement('article');
   el.className = 'news-card';
@@ -168,10 +171,7 @@ function createCard(filename, meta) {
   return el;
 }
 
-/* --------------------------
-   FEATURED (homepage)
-   - left unchanged by request
---------------------------- */
+// ---- Homepage Featured (unchanged) ----
 async function initFeaturedArticle() {
   const featuredEl = document.getElementById('featured-article');
   if (!featuredEl) return;
@@ -194,7 +194,7 @@ async function initFeaturedArticle() {
     return;
   }
 
-  // newest-first by Date
+  // newest-first by Date, fallback filename
   results.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
@@ -210,9 +210,7 @@ async function initFeaturedArticle() {
   featuredEl.appendChild(createCard(results[0].file, results[0].meta));
 }
 
-/* --------------------------
-   ARTICLE RENDER
---------------------------- */
+// ---- Article renderer ----
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
   const subtitle = meta.Subtitle || '';
@@ -223,7 +221,7 @@ function renderArticle(container, filename, meta, body) {
   const thumbUrl = resolveThumbPath(meta.Thumbnail);
   const thumbAlt = `${title} thumbnail`;
   const thumbHtml = thumbUrl
-    ? `<img src="${escapeHtml(encodeURI(thumbUrl))}" alt="${escapeHtml(thumbAlt)}" class="article-thumb">`
+    ? `${escapeHtml(encodeURI(thumbUrl))}`
     : '';
 
   const bodyHtml = renderMarkdownSafe(body);
@@ -239,10 +237,7 @@ function renderArticle(container, filename, meta, body) {
   document.title = `${title} — The Gazette`;
 }
 
-/* --------------------------
-   LIST PAGE (newsletters.html)
-   - hides items with Hidden: true
---------------------------- */
+// ---- Newsletters list (hide items with Hidden: true) ----
 function isTruthy(val) {
   if (val === true) return true;
   if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
@@ -267,7 +262,7 @@ async function initListPage() {
     })
   )).filter(Boolean);
 
-  // Hide items that have Hidden: true (or yes/1) in frontmatter — list page only.
+  // Filter out hidden items (list page only)
   const visible = results.filter(r => !isTruthy(r.meta.Hidden));
 
   if (!visible.length) {
@@ -275,7 +270,6 @@ async function initListPage() {
     return;
   }
 
-  // Sort newest-first by Date, fallback alphabetical
   visible.sort((a, b) => {
     if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
     return a.file.localeCompare(b.file);
@@ -286,9 +280,7 @@ async function initListPage() {
   }
 }
 
-/* --------------------------
-   ARTICLE PAGE BOOTSTRAP
---------------------------- */
+// ---- Article bootstrap ----
 async function initArticlePage() {
   const content = document.getElementById('article-content');
   if (!content) return;
@@ -308,11 +300,9 @@ async function initArticlePage() {
   }
 }
 
-/* --------------------------
-   INIT
---------------------------- */
+// ---- Init ----
 document.addEventListener('DOMContentLoaded', async () => {
   await initFeaturedArticle();
-  await initListPage();     // only this page has #news-list
-  await initArticlePage();  // only the article page has #article-content
+  await initListPage();
+  await initArticlePage();
 });
