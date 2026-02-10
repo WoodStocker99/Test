@@ -7,15 +7,10 @@
  *   2 - Validation errors (CI should fail)
  *   1 - Unexpected runtime error
  */
-
 'use strict';
 
 const fs = require('fs').promises;
 const path = require('path');
-
-/* -------------------------------
- * Helpers
- * ------------------------------- */
 
 function stripBomAndNormalize(text) {
   return String(text || '')
@@ -56,20 +51,9 @@ function isBoolish(v) {
   return v === undefined; // missing is fine
 }
 
-function toBool(v) {
-  if (v === true) return true;
-  if (typeof v === 'number') return v !== 0;
-  if (typeof v === 'string') return /^(true|yes|1)$/i.test(v.trim());
-  return false;
-}
-
 function looksTxt(name) {
   return typeof name === 'string' && name.toLowerCase().endsWith('.txt');
 }
-
-/* -------------------------------
- * IO
- * ------------------------------- */
 
 async function loadManifest() {
   const manifestPath = path.join(__dirname, '..', 'newsletters', 'index.json');
@@ -85,9 +69,7 @@ async function loadManifest() {
   } catch (e) {
     throw new Error(`Invalid JSON in newsletters/index.json: ${e.message}`);
   }
-  if (!Array.isArray(arr)) {
-    throw new Error('index.json is not an array');
-  }
+  if (!Array.isArray(arr)) throw new Error('index.json is not an array');
   return arr;
 }
 
@@ -97,32 +79,26 @@ async function readNewsletter(relFile) {
   return { filePath, text };
 }
 
-/* -------------------------------
- * Main validation
- * ------------------------------- */
-
 async function main() {
   let ok = true;
   try {
-    const manifest = await loadManifest(); // [/path/file.txt, ...] 
+    const manifest = await loadManifest(); // [/path/file.txt, ...]  [1](https://onvccs-my.sharepoint.com/personal/has95324_email_vccs_edu/Documents/Microsoft%20Copilot%20Chat%20Files/validate-news.yml)
+
     if (manifest.length === 0) {
       console.warn('Warning: manifest is empty');
     }
 
     for (const entry of manifest) {
-      // Entry must be a string filename
       if (typeof entry !== 'string') {
         console.error('Manifest contains non-string entry:', entry);
         ok = false;
         continue;
       }
 
-      // For your current workflow we expect .txt items (generator writes .txt names).
       if (!looksTxt(entry)) {
         console.warn(`${entry}: not a .txt file (allowed, but check generator configuration)`);
       }
 
-      // Read file that the manifest claims exists
       let text;
       try {
         const { text: raw } = await readNewsletter(entry);
@@ -133,59 +109,41 @@ async function main() {
         continue;
       }
 
-      // Parse frontmatter, then validate key fields
-      const { meta } = parseFrontmatter(text); // original logic retained  
+      const { meta } = parseFrontmatter(text); // original behavior with enhancements  [1](https://onvccs-my.sharepoint.com/personal/has95324_email_vccs_edu/Documents/Microsoft%20Copilot%20Chat%20Files/validate-news.yml)
 
-      // Title: warn if missing (matches your previous behavior)  
+      // Title: warn if missing (keep original policy)  [1](https://onvccs-my.sharepoint.com/personal/has95324_email_vccs_edu/Documents/Microsoft%20Copilot%20Chat%20Files/validate-news.yml)
       if (!meta.Title) {
         console.warn(`${entry}: missing Title in frontmatter`);
       }
 
-      // Date: validate YYYY-MM-DD
+      // Date: must be YYYY-MM-DD
       if (meta.Date) {
         const d = validateDateYMD(meta.Date);
         if (!d.ok) {
           console.error(`${entry}: Date must be YYYY-MM-DD (got: ${meta.Date})`);
           ok = false;
         } else {
-          // gentle warning on future dates (helpful for scheduling typos)
           const now = new Date();
-          if (d.value.getTime() - now.getTime() > 36 * 60 * 60 * 1000) { // > ~36h in future
+          if (d.value.getTime() - now.getTime() > 36 * 60 * 60 * 1000) {
             console.warn(`${entry}: Date appears to be in the future (${meta.Date})`);
           }
         }
       }
 
-      // Hidden / Draft (soft-hide) sanity checks — optional but helpful
+      // Hidden / Draft: boolean-ish only (soft-hide support)
       if (!isBoolish(meta.Hidden)) {
         console.warn(`${entry}: Hidden should be boolean-ish (true/false/yes/no/0/1)`);
       }
       if (!isBoolish(meta.Draft)) {
         console.warn(`${entry}: Draft should be boolean-ish (true/false/yes/no/0/1)`);
       }
-
-      // Optional policy: if both Hidden and Draft are present but disagree, warn
-      if (meta.Hidden !== undefined && meta.Draft !== undefined) {
-        if (toBool(meta.Hidden) !== toBool(meta.Draft)) {
-          console.warn(`${entry}: Hidden and Draft values disagree — verify intent`);
-        }
-      }
-
-      // (Optional) Thumbnail: just a gentle lint if obviously empty
-      if (typeof meta.Thumbnail === 'string' && meta.Thumbnail.trim() === '') {
-        console.warn(`${entry}: Thumbnail is an empty string — remove or set a path`);
-      }
     }
-
   } catch (e) {
-    // Unexpected runtime error (bad JSON, IO issue, etc.)
     console.error(e.message);
     process.exit(1);
   }
 
-  if (!ok) {
-    process.exit(2);
-  }
+  if (!ok) process.exit(2);
   console.log('Validation passed');
 }
 

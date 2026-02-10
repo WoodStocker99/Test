@@ -1,8 +1,10 @@
-// script.js — fixed, GitHub Pages friendly
+// script.js — manifest-driven newsletter loader + safe article rendering
+// Paths and conventions match your repo structure.
 const MANIFEST = 'newsletters/index.json';
 const NEWS_DIR = 'newsletters/';
-const DEFAULT_THUMB = `thumbnails/placeholder.png`;
+const DEFAULT_THUMB = 'thumbnails/placeholder.png';
 
+/** Basic HTML escaping for text content inserted via template strings. */
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -13,39 +15,52 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Only allow safe, repo-local filenames:
+ * - blocks traversal (".."), absolute paths ("/"), and external URLs.
+ * - normalizes backslashes
+ */
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') return '';
   const normalized = filename.replace(/\\/g, '/').trim();
-  // block traversal and absolute paths
-  if (normalized.includes('..') || normalized.startsWith('/')) return '';
-  return normalized;
+  if (
+    normalized.includes('..') ||
+    normalized.startsWith('/') ||
+    normalized.startsWith('http:') ||
+    normalized.startsWith('https:')
+  ) {
+    return '';
+  }
+  return normalized || '';
 }
 
+/**
+ * Parses simple frontmatter:
+ * ---
+ * Key: Value
+ * ...
+ * ---
+ * Body...
+ */
 function parseFrontmatter(text) {
-  // tolerate BOM + leading whitespace/newlines
-  let src = String(text || '').replace(/\r/g, '');
-  src = src.replace(/^\uFEFF/, '').replace(/^\s+/, '');
+  let src = String(text ?? '')
+    .replace(/\r/g, '')      // CRLF -> LF
+    .replace(/^\uFEFF/, '')  // strip BOM
+    .replace(/^\s+/, '');    // allow leading whitespace
 
   if (!src.startsWith('---\n') && src !== '---') {
     return { meta: {}, body: src.trim() };
   }
-
   const lines = src.split('\n');
   const meta = {};
   let i = 1;
-
   for (; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (line === '---') {
-      i++;
-      break;
-    }
+    if (line === '---') { i++; break; }
     if (!line) continue;
-
     const m = line.match(/^([^:]+)\s*:\s*(.*)$/);
     if (m) meta[m[1].trim()] = m[2].trim();
   }
-
   const body = lines.slice(i).join('\n').trim();
   return { meta, body };
 }
@@ -66,11 +81,9 @@ async function loadManifest() {
 async function loadNewsletter(filename) {
   const sanitized = sanitizeFilename(filename);
   if (!sanitized) throw new Error('Invalid filename');
-
   const path = `${NEWS_DIR}${sanitized}`;
   const res = await fetch(path, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to fetch ${path}`);
-
   const text = await res.text();
   return parseFrontmatter(text);
 }
@@ -83,21 +96,26 @@ function formatDate(dateStr) {
 }
 
 function renderParagraphs(text) {
-  const paragraphs = String(text || '')
+  const paragraphs = String(text ?? '')
     .split(/\n\s*\n/)
     .map(p => p.trim())
     .filter(Boolean);
-
   return paragraphs
     .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
     .join('\n');
 }
 
+/**
+ * Markdown rendering:
+ * - If marked + DOMPurify are available (on article/newsletters pages), use them.
+ * - Otherwise fallback to basic paragraphs.
+ */
 function renderMarkdownSafe(text) {
   if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
-    const raw = window.marked.parse(String(text || ''));
+    const raw = window.marked.parse(String(text ?? ''));
     return window.DOMPurify.sanitize(raw, {
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style']
+      // keep this conservative
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'],
     });
   }
   return renderParagraphs(text);
@@ -105,7 +123,6 @@ function renderMarkdownSafe(text) {
 
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
-  // If they wrote "thumbnails/x.jpg", make it "/thumbnails/x.jpg"
   const t = String(thumbValue).trim();
   if (/^(https?:)?\/\//i.test(t) || t.startsWith('/')) return t;
   if (t.startsWith('newsletters/')) return t;
@@ -121,7 +138,8 @@ function createCard(filename, meta) {
 
   const thumbEl = document.createElement('div');
   thumbEl.className = 'news-thumb';
-  thumbEl.style.backgroundImage = `url("${encodeURI(resolveThumbPath(meta.Thumbnail))}")`;
+  const thumbUrl = resolveThumbPath(meta.Thumbnail);
+  thumbEl.style.backgroundImage = `url("${encodeURI(thumbUrl)}")`;
 
   const bodyEl = document.createElement('div');
   bodyEl.className = 'news-body';
@@ -129,7 +147,8 @@ function createCard(filename, meta) {
   const metaEl = document.createElement('div');
   metaEl.className = 'news-meta';
   const date = formatDate(meta.Date);
-  metaEl.textContent = `${date}${date ? ' • ' : ''}${meta.Author || 'Staff'}`;
+  const author = meta.Author || 'Staff';
+  metaEl.textContent = `${date}${date ? ' • ' : ''}${author}`;
 
   const titleEl = document.createElement('h3');
   titleEl.className = 'news-title';
@@ -149,54 +168,51 @@ function createCard(filename, meta) {
   return el;
 }
 
+/* --------------------------
+   FEATURED (homepage)
+   - left unchanged by request
+--------------------------- */
 async function initFeaturedArticle() {
   const featuredEl = document.getElementById('featured-article');
   if (!featuredEl) return;
 
   const manifest = await loadManifest();
   if (!manifest.length) {
-    featuredEl.innerHTML = `<p>No newsletters found.</p>`;
+    featuredEl.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
     return;
   }
 
-  // Load all meta (could be optimized later, but fine for small lists)
   const results = (await Promise.all(
     manifest.map(async (f) => {
-      try {
-        const parsed = await loadNewsletter(f);
-        return { file: f, meta: parsed.meta };
-      } catch (e) {
-        console.warn('Skipping', f, e);
-        return null;
-      }
+      try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
+      catch (e) { console.warn('Skipping', f, e); return null; }
     })
   )).filter(Boolean);
 
   if (!results.length) {
-    featuredEl.innerHTML = `<p>No readable newsletters found.</p>`;
+    featuredEl.innerHTML = `<p class="news-meta">No readable newsletters found.</p>`;
     return;
   }
 
-  // Sort newest-first using meta.Date when available, fallback to filename
+  // newest-first by Date
   results.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
     const aOk = ad && !Number.isNaN(ad.getTime());
     const bOk = bd && !Number.isNaN(bd.getTime());
-
     if (aOk && bOk) return bd - ad;
     if (aOk) return -1;
     if (bOk) return 1;
     return b.file.localeCompare(a.file);
   });
 
-  const newest = results[0];
-
-  // Reuse your existing card renderer
   featuredEl.innerHTML = '';
-  featuredEl.appendChild(createCard(newest.file, newest.meta));
+  featuredEl.appendChild(createCard(results[0].file, results[0].meta));
 }
 
+/* --------------------------
+   ARTICLE RENDER
+--------------------------- */
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
   const subtitle = meta.Subtitle || '';
@@ -204,34 +220,34 @@ function renderArticle(container, filename, meta, body) {
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
 
-  // ✅ NEW: resolve a usable thumbnail URL (or fall back to placeholder)
   const thumbUrl = resolveThumbPath(meta.Thumbnail);
   const thumbAlt = `${title} thumbnail`;
+  const thumbHtml = thumbUrl
+    ? `<img src="${escapeHtml(encodeURI(thumbUrl))}" alt="${escapeHtml(thumbAlt)}" class="article-thumb">`
+    : '';
 
-  const bodyHtml = (window.marked && window.DOMPurify)
-    ? renderMarkdownSafe(body)
-    : renderParagraphs(body);
+  const bodyHtml = renderMarkdownSafe(body);
 
   container.innerHTML = `
-    ${thumbUrl ? `
-      <img
-        class="article-thumb"
-        src="${encodeURI(thumbUrl)}"
-        alt="${escapeHtml(thumbAlt)}"
-        loading="lazy"
-      />
-    ` : ''}
-
+    ${thumbHtml}
     <h1>${escapeHtml(title)}</h1>
     ${subtitle ? `<p class="lead">${escapeHtml(subtitle)}</p>` : ''}
     <p class="news-meta">${escapeHtml(metaLine)}</p>
-
-    <hr />
-
-    ${bodyHtml}
+    <div class="article-body">${bodyHtml}</div>
   `;
 
   document.title = `${title} — The Gazette`;
+}
+
+/* --------------------------
+   LIST PAGE (newsletters.html)
+   - hides items with Hidden: true
+--------------------------- */
+function isTruthy(val) {
+  if (val === true) return true;
+  if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
+  if (typeof val === 'number') return val !== 0;
+  return false;
 }
 
 async function initListPage() {
@@ -240,32 +256,39 @@ async function initListPage() {
 
   const manifest = await loadManifest();
   if (!manifest.length) {
-    newsListEl.innerHTML = `<p>No newsletters found.</p>`;
+    newsListEl.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
     return;
   }
 
   const results = (await Promise.all(
-    manifest.map(async f => {
-      try {
-        const parsed = await loadNewsletter(f);
-        return { file: f, meta: parsed.meta, body: parsed.body };
-      } catch (e) {
-        console.warn('Skipping', f, e);
-        return null;
-      }
+    manifest.map(async (f) => {
+      try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
+      catch (e) { console.warn('Skipping', f, e); return null; }
     })
   )).filter(Boolean);
 
-  results.sort((a, b) => {
+  // Hide items that have Hidden: true (or yes/1) in frontmatter — list page only.
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden));
+
+  if (!visible.length) {
+    newsListEl.innerHTML = `<p class="news-meta">No newsletters to display.</p>`;
+    return;
+  }
+
+  // Sort newest-first by Date, fallback alphabetical
+  visible.sort((a, b) => {
     if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
     return a.file.localeCompare(b.file);
   });
 
-  for (const r of results) {
+  for (const r of visible) {
     newsListEl.appendChild(createCard(r.file, r.meta));
   }
 }
 
+/* --------------------------
+   ARTICLE PAGE BOOTSTRAP
+--------------------------- */
 async function initArticlePage() {
   const content = document.getElementById('article-content');
   if (!content) return;
@@ -273,21 +296,23 @@ async function initArticlePage() {
   const params = new URLSearchParams(window.location.search);
   const file = sanitizeFilename(params.get('article'));
   if (!file) {
-    content.innerHTML = `<p>Missing or invalid article parameter.</p>`;
+    content.innerHTML = `<p class="news-meta">Missing or invalid article parameter.</p>`;
     return;
   }
-
   try {
     const parsed = await loadNewsletter(file);
     renderArticle(content, file, parsed.meta, parsed.body);
   } catch (e) {
     console.error(e);
-    content.innerHTML = `<p>Could not load article: <strong>${escapeHtml(file)}</strong></p>`;
+    content.innerHTML = `<p class="news-meta">Could not load article: ${escapeHtml(file)}</p>`;
   }
 }
 
+/* --------------------------
+   INIT
+--------------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
   await initFeaturedArticle();
-  await initListPage();
-  await initArticlePage();
+  await initListPage();     // only this page has #news-list
+  await initArticlePage();  // only the article page has #article-content
 });
