@@ -413,7 +413,7 @@ async function initArticlePage() {
     const parsed = await loadNewsletter(file);
     renderArticle(content, file, parsed.meta, parsed.body);
 
-    // Share links
+    // Share linkss
     buildShareLinks(parsed.meta.Title || file);
 
     // Next/Prev: we want filename order DESC by date (newest last? depends).
