@@ -3,7 +3,7 @@ Title: Lorem Ipsum
 Author: Lorem D. Ipsum
 Subtitle: lorem Ipsum
 Thumbnail: 
-Hidden: yes
+Hidden: true
 Date: 2026-01-20
 ---
 
