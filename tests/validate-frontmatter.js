@@ -23,6 +23,21 @@ function parseFrontmatter(text) {
   return { meta, body };
 }
 
+function isBoolish(v){
+  if (typeof v === 'boolean') return true;
+  if (typeof v === 'string') return /^(true|false|yes|no|0|1)$/i.test(v.trim());
+  if (typeof v === 'number') return v === 0 || v === 1;
+  return v === undefined;
+}
+
+// after: const { meta } = parseFrontmatter(raw);
+if (!isBoolish(meta.Hidden)) {
+  console.warn(`${file}: Hidden should be a boolean (true/false/yes/no/0/1).`);
+}
+if (!isBoolish(meta.Draft)) {
+  console.warn(`${file}: Draft should be a boolean (true/false/yes/no/0/1).`);
+}
+
 async function loadManifest() {
   const p = path.join(__dirname, '..', 'newsletters', 'index.json');
   try {
@@ -77,3 +92,4 @@ async function main() {
 }
 
 main();
+
