@@ -1,11 +1,12 @@
-// script.js — manifest-driven newsletter loader + safe article rendering
-// Works with local thumbnails (thumbnails/foo.jpg) and external URLs.
-// Hides items with Hidden: true from the newsletters list and from the Featured block.
+// script.js — Sleepy Hollow Media
+// Manifest-driven newsletter loader + safe article rendering
+// Adds homepage Latest grid + nav aria-current
 
 // ---- Paths ----
 const MANIFEST = 'newsletters/index.json';
 const NEWS_DIR = 'newsletters/';
 const DEFAULT_THUMB = 'thumbnails/placeholder.png';
+const LATEST_LIMIT = 8; // how many items to show on the homepage grid
 
 // ---- Utils ----
 function escapeHtml(str) {
@@ -20,7 +21,6 @@ function escapeHtml(str) {
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') return '';
   const normalized = filename.replace(/\\/g, '/').trim();
-  // block traversal, absolute paths, and external URLs for filenames taken from URL query
   if (
     normalized.includes('..') ||
     normalized.startsWith('/') ||
@@ -33,9 +33,9 @@ function sanitizeFilename(filename) {
 }
 function parseFrontmatter(text) {
   let src = String(text ?? '')
-    .replace(/\r/g, '') // CRLF -> LF
-    .replace(/^\uFEFF/, '') // strip BOM
-    .replace(/^\s+/, ''); // tolerate leading whitespace
+    .replace(/\r/g, '')
+    .replace(/^\uFEFF/, '')
+    .replace(/^\s+/, '');
   if (!src.startsWith('---\n') && src !== '---') {
     return { meta: {}, body: src.trim() };
   }
@@ -84,29 +84,33 @@ function renderParagraphs(text) {
     .split(/\n\s*\n/)
     .map(p => p.trim())
     .filter(Boolean);
-  return paragraphs
-    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('\n');
+  return paragraphs.map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('\n');
 }
 function renderMarkdownSafe(text) {
   if (typeof window !== 'undefined' && window.marked && window.DOMPurify) {
     const raw = window.marked.parse(String(text ?? ''));
     return window.DOMPurify.sanitize(raw, {
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'], // conservative
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class'],
     });
   }
   return renderParagraphs(text);
 }
-// ---- Thumbnail path resolver ----
 function resolveThumbPath(thumbValue) {
   if (!thumbValue) return DEFAULT_THUMB;
   const t = String(thumbValue).trim();
-  if (/^(https?:)?\/\//i.test(t)) return t; // external or protocol-relative
-  if (t.startsWith('/')) return t; // root-relative
-  if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t; // local known
-  return t; // other relative paths
+  if (/^(https?:)?\/\//i.test(t)) return t;
+  if (t.startsWith('/')) return t;
+  if (t.startsWith('thumbnails/') || t.startsWith('newsletters/')) return t;
+  return t;
 }
-// ---- Card rendering for lists/featured ----
+function isTruthy(val) {
+  if (val === true) return true;
+  if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
+  if (typeof val === 'number') return val !== 0;
+  return false;
+}
+
+// ---- Cards ----
 function createCard(filename, meta) {
   const el = document.createElement('article');
   el.className = 'news-card';
@@ -137,21 +141,54 @@ function createCard(filename, meta) {
 
   bodyEl.append(metaEl, titleEl, subEl);
   el.append(thumbEl, bodyEl);
-
   el.addEventListener('click', () => {
     location.href = `article.html?article=${encodeURIComponent(filename)}`;
   });
-
   return el;
 }
-// ---- Soft-hide helpers ----
-function isTruthy(val) {
-  if (val === true) return true;
-  if (typeof val === 'string') return /^(true|yes|1)$/i.test(val.trim());
-  if (typeof val === 'number') return val !== 0;
-  return false;
+
+// Card for Latest grid
+function createGridCard(filename, meta) {
+  const a = document.createElement('a');
+  a.className = 'card';
+  a.href = `article.html?article=${encodeURIComponent(filename)}`;
+  a.setAttribute('aria-label', meta.Title || filename);
+
+  const img = document.createElement('div');
+  img.className = 'card-img';
+  img.style.backgroundImage = `url("${encodeURI(resolveThumbPath(meta.Thumbnail))}")`;
+
+  const body = document.createElement('div');
+  body.className = 'card-body';
+
+  const metaLine = document.createElement('div');
+  metaLine.className = 'card-meta';
+  const date = formatDate(meta.Date);
+  const author = meta.Author || 'Staff';
+  metaLine.textContent = `${date}${date ? ' • ' : ''}${author}`;
+
+  const title = document.createElement('h3');
+  title.className = 'card-title';
+  title.textContent = meta.Title || filename;
+
+  const sub = document.createElement('p');
+  sub.className = 'card-sub';
+  sub.textContent = meta.Subtitle || '';
+
+  // Optional category chip if present
+  if (meta.Category) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = meta.Category;
+    body.appendChild(chip);
+  }
+
+  body.append(metaLine, title, sub);
+  a.append(img, body);
+  return a;
 }
-// ---- Homepage Featured (now excludes Hidden) ----
+
+// ---- Homepage Featured ----
 async function initFeaturedArticle() {
   const featuredEl = document.getElementById('featured-article');
   if (!featuredEl) return;
@@ -167,25 +204,70 @@ async function initFeaturedArticle() {
     })
   )).filter(Boolean);
 
-  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden));
   if (!visible.length) {
     featuredEl.innerHTML = `<p class="news-meta">No visible newsletters found.</p>`;
     return;
   }
+  // Sort newest first by Date (fallback to filename)
   visible.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
     const aOk = ad && !Number.isNaN(ad.getTime());
-    const bOk = bd && !Number.isNaN(b.getTime?.() ?? bd.getTime());
+    const bOk = bd && !Number.isNaN(bd.getTime());
     if (aOk && bOk) return bd - ad;
     if (aOk) return -1;
     if (bOk) return 1;
     return b.file.localeCompare(a.file);
   });
+
   featuredEl.innerHTML = '';
   featuredEl.appendChild(createCard(visible[0].file, visible[0].meta));
 }
-// ---- Newsletters list (excludes Hidden) ----
+
+// ---- Homepage Latest grid ----
+async function initLatestGrid() {
+  const grid = document.getElementById('latest-grid');
+  if (!grid) return;
+
+  const manifest = await loadManifest();
+  if (!manifest.length) {
+    grid.innerHTML = `<p class="news-meta">No newsletters found.</p>`;
+    return;
+  }
+
+  const results = (await Promise.all(
+    manifest.map(async (f) => {
+      try { const parsed = await loadNewsletter(f); return { file: f, meta: parsed.meta }; }
+      catch (e) { console.warn('Skipping', f, e); return null; }
+    })
+  )).filter(Boolean);
+
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden));
+  if (!visible.length) {
+    grid.innerHTML = `<p class="news-meta">No visible newsletters.</p>`;
+    return;
+  }
+
+  visible.sort((a, b) => {
+    const ad = a.meta.Date ? new Date(a.meta.Date) : null;
+    const bd = b.meta.Date ? new Date(b.meta.Date) : null;
+    const aOk = ad && !Number.isNaN(ad.getTime());
+    const bOk = bd && !Number.isNaN(bd.getTime());
+    if (aOk && bOk) return bd - ad;
+    if (aOk) return -1;
+    if (bOk) return 1;
+    return b.file.localeCompare(a.file);
+  });
+
+  const top = visible.slice(0, LATEST_LIMIT);
+  grid.innerHTML = '';
+  for (const r of top) {
+    grid.appendChild(createGridCard(r.file, r.meta));
+  }
+}
+
+// ---- Newsletters list page ----
 async function initListPage() {
   const newsListEl = document.getElementById('news-list');
   if (!newsListEl) return;
@@ -201,7 +283,7 @@ async function initListPage() {
     })
   )).filter(Boolean);
 
-  const visible = results.filter(r => !isTruthy(r.meta.Hidden) /* && !isTruthy(r.meta.Draft) */);
+  const visible = results.filter(r => !isTruthy(r.meta.Hidden));
   if (!visible.length) {
     newsListEl.innerHTML = `<p class="news-meta">No newsletters to display.</p>`;
     return;
@@ -214,7 +296,8 @@ async function initListPage() {
     newsListEl.appendChild(createCard(r.file, r.meta));
   }
 }
-// ---- Article render ----
+
+// ---- Article page ----
 function renderArticle(container, filename, meta, body) {
   const title = meta.Title || filename;
   const subtitle = meta.Subtitle || '';
@@ -222,11 +305,9 @@ function renderArticle(container, filename, meta, body) {
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
   const thumbUrl = resolveThumbPath(meta.Thumbnail);
-  const thumbAlt = `${title} thumbnail`;
-  const thumbHtml = thumbUrl
-    ? `<img src="${escapeHtml(encodeURI(thumbUrl))}" alt="${escapeHtml(thumbAlt)}" class="article-thumb">`
-    : '';
   const bodyHtml = renderMarkdownSafe(body);
+
+  const thumbHtml = thumbUrl ? `${escapeHtml(encodeURI(thumbUrl))}` : '';
 
   container.innerHTML = `
     ${thumbHtml}
@@ -237,7 +318,6 @@ function renderArticle(container, filename, meta, body) {
   `;
   document.title = `${title} — Sleepy Hollow Media`;
 }
-// ---- Article bootstrap ----
 async function initArticlePage() {
   const content = document.getElementById('article-content');
   if (!content) return;
@@ -256,13 +336,23 @@ async function initArticlePage() {
   }
 }
 
+// ---- Helpers ----
+function markCurrentNav() {
+  const path = location.pathname.split('/').pop() || 'index.html';
+  const map = {
+    'index.html': 'home',
+    'newsletters.html': 'newsletters'
+  };
+  const key = map[path];
+  if (!key) return;
+  document.querySelectorAll(`[data-nav="${key}"]`).forEach(a => {
+    a.setAttribute('aria-current', 'page');
+  });
+}
+
 // ---- Init ----
 document.addEventListener('DOMContentLoaded', async () => {
-  await initFeaturedArticle();
-  await initListPage();
-  await initArticlePage();
-
-  // --- Sleepy Hollow mobile menu toggle ---
+  // Header interactions
   const toggle = document.querySelector('.sh-nav-toggle');
   const menu = document.getElementById('sh-mobile-menu');
   if (toggle && menu) {
@@ -271,4 +361,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
   }
+  markCurrentNav();
+
+  // Page bootstraps
+  await initFeaturedArticle();
+  await initLatestGrid();
+  await initListPage();
+  await initArticlePage();
 });
