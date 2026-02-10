@@ -1,12 +1,11 @@
 // script.js — Sleepy Hollow Media
-// Manifest-driven newsletter loader + safe article rendering
-// Adds homepage Latest grid + nav aria-current
+// Manifest-driven content + article hero + reading time + share + next/prev
 
-// ---- Paths ----
+// ---- Config & Paths ----
 const MANIFEST = 'newsletters/index.json';
 const NEWS_DIR = 'newsletters/';
 const DEFAULT_THUMB = 'thumbnails/placeholder.png';
-const LATEST_LIMIT = 8; // how many items to show on the homepage grid
+const LATEST_LIMIT = 8; // homepage grid
 
 // ---- Utils ----
 function escapeHtml(str) {
@@ -110,7 +109,23 @@ function isTruthy(val) {
   return false;
 }
 
-// ---- Cards ----
+// ---- UI helpers ----
+function markCurrentNav() {
+  const path = location.pathname.split('/').pop() || 'index.html';
+  const map = { 'index.html': 'home', 'newsletters.html': 'newsletters' };
+  const key = map[path];
+  if (!key) return;
+  document.querySelectorAll(`[data-nav="${key}"]`).forEach(a => {
+    a.setAttribute('aria-current', 'page');
+  });
+}
+function readingTimeFromText(text, wpm = 200) {
+  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean).length;
+  const mins = Math.max(1, Math.round(words / wpm));
+  return `${mins} min read`;
+}
+
+// ---- Cards for list/featured/grid ----
 function createCard(filename, meta) {
   const el = document.createElement('article');
   el.className = 'news-card';
@@ -146,8 +161,6 @@ function createCard(filename, meta) {
   });
   return el;
 }
-
-// Card for Latest grid
 function createGridCard(filename, meta) {
   const a = document.createElement('a');
   a.className = 'card';
@@ -175,7 +188,6 @@ function createGridCard(filename, meta) {
   sub.className = 'card-sub';
   sub.textContent = meta.Subtitle || '';
 
-  // Optional category chip if present
   if (meta.Category) {
     const chip = document.createElement('span');
     chip.className = 'chip';
@@ -209,7 +221,6 @@ async function initFeaturedArticle() {
     featuredEl.innerHTML = `<p class="news-meta">No visible newsletters found.</p>`;
     return;
   }
-  // Sort newest first by Date (fallback to filename)
   visible.sort((a, b) => {
     const ad = a.meta.Date ? new Date(a.meta.Date) : null;
     const bd = b.meta.Date ? new Date(b.meta.Date) : null;
@@ -220,7 +231,6 @@ async function initFeaturedArticle() {
     if (bOk) return 1;
     return b.file.localeCompare(a.file);
   });
-
   featuredEl.innerHTML = '';
   featuredEl.appendChild(createCard(visible[0].file, visible[0].meta));
 }
@@ -262,9 +272,7 @@ async function initLatestGrid() {
 
   const top = visible.slice(0, LATEST_LIMIT);
   grid.innerHTML = '';
-  for (const r of top) {
-    grid.appendChild(createGridCard(r.file, r.meta));
-  }
+  for (const r of top) grid.appendChild(createGridCard(r.file, r.meta));
 }
 
 // ---- Newsletters list page ----
@@ -292,65 +300,133 @@ async function initListPage() {
     if (a.meta.Date && b.meta.Date) return new Date(b.meta.Date) - new Date(a.meta.Date);
     return a.file.localeCompare(b.file);
   });
-  for (const r of visible) {
-    newsListEl.appendChild(createCard(r.file, r.meta));
-  }
+  for (const r of visible) newsListEl.appendChild(createCard(r.file, r.meta));
 }
 
 // ---- Article page ----
+function populateArticleHero(meta) {
+  const hero = document.getElementById('article-hero');
+  const bg = document.querySelector('.article-hero-bg');
+  const titleEl = document.getElementById('article-title');
+  const subEl = document.getElementById('article-subtitle');
+  const metaEl = document.getElementById('article-meta');
+  const catEl = document.getElementById('article-category');
+
+  const title = meta.Title || 'Untitled';
+  const subtitle = meta.Subtitle || '';
+  const date = formatDate(meta.Date);
+  const author = meta.Author || 'Staff';
+  const cat = meta.Category || '';
+
+  titleEl.textContent = title;
+  subEl.textContent = subtitle;
+  metaEl.textContent = `${date}${date ? ' • ' : ''}${author}`;
+  if (cat) {
+    catEl.textContent = cat;
+    catEl.hidden = false;
+  } else {
+    catEl.hidden = true;
+  }
+
+  const thumbUrl = resolveThumbPath(meta.Thumbnail);
+  bg.style.backgroundImage = `url("${encodeURI(thumbUrl)}")`;
+}
+function buildShareLinks(title) {
+  const url = location.href;
+  const email = document.querySelector('[data-share="email"]');
+  const reddit = document.querySelector('[data-share="reddit"]');
+  const x = document.querySelector('[data-share="x"]');
+  const copyBtn = document.querySelector('[data-share="copy"]');
+  const feedback = document.getElementById('share-feedback');
+
+  if (email) email.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(url)}`;
+  if (reddit) reddit.href = `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+  if (x) x.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`;
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        if (feedback) { feedback.textContent = 'Link copied!'; setTimeout(()=>feedback.textContent='', 1500); }
+      } catch {
+        if (feedback) { feedback.textContent = 'Could not copy.'; setTimeout(()=>feedback.textContent='', 1500); }
+      }
+    });
+  }
+}
+function setNextPrev(manifest, currentFile) {
+  const prevA = document.getElementById('prev-article');
+  const nextA = document.getElementById('next-article');
+  if (!prevA || !nextA) return;
+
+  const idx = manifest.indexOf(currentFile);
+  if (idx > 0) {
+    const prevFile = manifest[idx - 1];
+    prevA.href = `article.html?article=${encodeURIComponent(prevFile)}`;
+    prevA.hidden = false;
+  }
+  if (idx >= 0 && idx < manifest.length - 1) {
+    const nextFile = manifest[idx + 1];
+    nextA.href = `article.html?article=${encodeURIComponent(nextFile)}`;
+    nextA.hidden = false;
+  }
+}
 function renderArticle(container, filename, meta, body) {
-  const title = meta.Title || filename;
+  // Assemble hero first
+  populateArticleHero(meta);
+
+  // Compute reading time from *render-stripped* text
+  const reading = readingTimeFromText(body, 200);
+  const rtEl = document.getElementById('article-reading-time');
+  if (rtEl) rtEl.textContent = ` • ${reading}`;
+
+  // Render body with Markdown (sanitized)
+  const bodyHtml = renderMarkdownSafe(body);
+
+  // Inject into article content
   const subtitle = meta.Subtitle || '';
   const date = formatDate(meta.Date);
   const author = meta.Author || 'Staff';
   const metaLine = `${date}${date ? ' • ' : ''}${author}`;
-  const thumbUrl = resolveThumbPath(meta.Thumbnail);
-  const bodyHtml = renderMarkdownSafe(body);
 
-  const thumbHtml = thumbUrl ? `${escapeHtml(encodeURI(thumbUrl))}` : '';
-
+  // We hide the first inline image (hero) via CSS, so body starts naturally
   container.innerHTML = `
-    ${thumbHtml}
-    <h1>${escapeHtml(title)}</h1>
     ${subtitle ? `<p class="lead">${escapeHtml(subtitle)}</p>` : ''}
-    <p class="news-meta">${escapeHtml(metaLine)}</p>
+    <p class="news-meta">${escapeHtml(metaLine)} • ${escapeHtml(reading)}</p>
     <div class="article-body">${bodyHtml}</div>
   `;
-  document.title = `${title} — Sleepy Hollow Media`;
+
+  document.title = `${meta.Title || filename} — Sleepy Hollow Media`;
 }
 async function initArticlePage() {
   const content = document.getElementById('article-content');
   if (!content) return;
+
   const params = new URLSearchParams(window.location.search);
   const file = sanitizeFilename(params.get('article'));
   if (!file) {
     content.innerHTML = `<p class="news-meta">Missing or invalid article parameter.</p>`;
     return;
   }
+
   try {
     const parsed = await loadNewsletter(file);
     renderArticle(content, file, parsed.meta, parsed.body);
+
+    // Share links
+    buildShareLinks(parsed.meta.Title || file);
+
+    // Next/Prev: we want filename order DESC by date (newest last? depends).
+    // Simpler: use manifest natural order and link neighbors.
+    const manifest = await loadManifest();
+    setNextPrev(manifest, file);
   } catch (e) {
     console.error(e);
     content.innerHTML = `<p class="news-meta">Could not load article: ${escapeHtml(file)}</p>`;
   }
 }
 
-// ---- Helpers ----
-function markCurrentNav() {
-  const path = location.pathname.split('/').pop() || 'index.html';
-  const map = {
-    'index.html': 'home',
-    'newsletters.html': 'newsletters'
-  };
-  const key = map[path];
-  if (!key) return;
-  document.querySelectorAll(`[data-nav="${key}"]`).forEach(a => {
-    a.setAttribute('aria-current', 'page');
-  });
-}
-
-// ---- Init ----
+// ---- Boot ----
 document.addEventListener('DOMContentLoaded', async () => {
   // Header interactions
   const toggle = document.querySelector('.sh-nav-toggle');
@@ -363,7 +439,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   markCurrentNav();
 
-  // Page bootstraps
+  // Pages
   await initFeaturedArticle();
   await initLatestGrid();
   await initListPage();
