@@ -1,17 +1,36 @@
 #!/usr/bin/env node
-// Validates newsletters/index.json and each .txt frontmatter keys
+/* eslint-disable no-console */
+/**
+ * Validate newsletters manifest + frontmatter.
+ * Exits:
+ *   0 - OK
+ *   2 - Validation errors (CI should fail)
+ *   1 - Unexpected runtime error
+ */
+
+'use strict';
 
 const fs = require('fs').promises;
 const path = require('path');
 
+/* -------------------------------
+ * Helpers
+ * ------------------------------- */
+
+function stripBomAndNormalize(text) {
+  return String(text || '')
+    .replace(/^\uFEFF/, '') // BOM
+    .replace(/\r/g, '');    // CRLF -> LF
+}
+
 function parseFrontmatter(text) {
-  text = text.replace(/\r/g, '');
-  if (!text.startsWith('---')) {
-    return { meta: {}, body: text.trim() };
+  const src = stripBomAndNormalize(text).replace(/^\s+/, ''); // allow leading whitespace
+  if (!src.startsWith('---\n') && src !== '---') {
+    return { meta: {}, body: src.trim() };
   }
-  const parts = text.split('\n');
-  let i = 1;
+  const parts = src.split('\n');
   const meta = {};
+  let i = 1;
   for (; i < parts.length; i++) {
     const line = parts[i].trim();
     if (line === '---') { i++; break; }
@@ -23,73 +42,151 @@ function parseFrontmatter(text) {
   return { meta, body };
 }
 
-function isBoolish(v){
-  if (typeof v === 'boolean') return true;
-  if (typeof v === 'string') return /^(true|false|yes|no|0|1)$/i.test(v.trim());
-  if (typeof v === 'number') return v === 0 || v === 1;
-  return v === undefined;
+function validateDateYMD(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return { ok: false, reason: 'not-YYYY-MM-DD' };
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return { ok: false, reason: 'invalid-date' };
+  return { ok: true, value: d };
 }
 
-// after: const { meta } = parseFrontmatter(raw);
-if (!isBoolish(meta.Hidden)) {
-  console.warn(`${file}: Hidden should be a boolean (true/false/yes/no/0/1).`);
+function isBoolish(v) {
+  if (typeof v === 'boolean') return true;
+  if (typeof v === 'number') return v === 0 || v === 1;
+  if (typeof v === 'string') return /^(true|false|yes|no|0|1)$/i.test(v.trim());
+  return v === undefined; // missing is fine
 }
-if (!isBoolish(meta.Draft)) {
-  console.warn(`${file}: Draft should be a boolean (true/false/yes/no/0/1).`);
+
+function toBool(v) {
+  if (v === true) return true;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') return /^(true|yes|1)$/i.test(v.trim());
+  return false;
 }
+
+function looksTxt(name) {
+  return typeof name === 'string' && name.toLowerCase().endsWith('.txt');
+}
+
+/* -------------------------------
+ * IO
+ * ------------------------------- */
 
 async function loadManifest() {
-  const p = path.join(__dirname, '..', 'newsletters', 'index.json');
+  const manifestPath = path.join(__dirname, '..', 'newsletters', 'index.json');
+  let raw;
   try {
-    const raw = await fs.readFile(p, 'utf8');
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) throw new Error('index.json is not an array');
-    return arr;
+    raw = await fs.readFile(manifestPath, 'utf8');
   } catch (e) {
-    throw new Error('Failed to load newsletters/index.json: ' + e.message);
+    throw new Error(`Failed to load newsletters/index.json: ${e.message}`);
   }
+  let arr;
+  try {
+    arr = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`Invalid JSON in newsletters/index.json: ${e.message}`);
+  }
+  if (!Array.isArray(arr)) {
+    throw new Error('index.json is not an array');
+  }
+  return arr;
 }
 
-function validateDate(dateStr) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+async function readNewsletter(relFile) {
+  const filePath = path.join(__dirname, '..', 'newsletters', relFile);
+  const text = await fs.readFile(filePath, 'utf8');
+  return { filePath, text };
 }
+
+/* -------------------------------
+ * Main validation
+ * ------------------------------- */
 
 async function main() {
   let ok = true;
   try {
-    const manifest = await loadManifest();
+    const manifest = await loadManifest(); // [/path/file.txt, ...] 
     if (manifest.length === 0) {
       console.warn('Warning: manifest is empty');
     }
-    for (const file of manifest) {
-      if (typeof file !== 'string') {
-        console.error('Manifest contains non-string entry:', file);
+
+    for (const entry of manifest) {
+      // Entry must be a string filename
+      if (typeof entry !== 'string') {
+        console.error('Manifest contains non-string entry:', entry);
         ok = false;
         continue;
       }
-      const filePath = path.join(__dirname, '..', 'newsletters', file);
+
+      // For your current workflow we expect .txt items (generator writes .txt names).
+      if (!looksTxt(entry)) {
+        console.warn(`${entry}: not a .txt file (allowed, but check generator configuration)`);
+      }
+
+      // Read file that the manifest claims exists
+      let text;
       try {
-        const raw = await fs.readFile(filePath, 'utf8');
-        const { meta } = parseFrontmatter(raw);
-        if (meta.Date && !validateDate(meta.Date)) {
-          console.error(`${file}: Date value is not YYYY-MM-DD: ${meta.Date}`);
-          ok = false;
-        }
-        if (!meta.Title) {
-          console.warn(`${file}: missing Title in frontmatter`);
-        }
+        const { text: raw } = await readNewsletter(entry);
+        text = raw;
       } catch (e) {
-        console.error(`Missing or unreadable file listed in manifest: ${file}`);
+        console.error(`Missing or unreadable file listed in manifest: ${entry}`);
         ok = false;
+        continue;
+      }
+
+      // Parse frontmatter, then validate key fields
+      const { meta } = parseFrontmatter(text); // original logic retained  
+
+      // Title: warn if missing (matches your previous behavior)  
+      if (!meta.Title) {
+        console.warn(`${entry}: missing Title in frontmatter`);
+      }
+
+      // Date: validate YYYY-MM-DD
+      if (meta.Date) {
+        const d = validateDateYMD(meta.Date);
+        if (!d.ok) {
+          console.error(`${entry}: Date must be YYYY-MM-DD (got: ${meta.Date})`);
+          ok = false;
+        } else {
+          // gentle warning on future dates (helpful for scheduling typos)
+          const now = new Date();
+          if (d.value.getTime() - now.getTime() > 36 * 60 * 60 * 1000) { // > ~36h in future
+            console.warn(`${entry}: Date appears to be in the future (${meta.Date})`);
+          }
+        }
+      }
+
+      // Hidden / Draft (soft-hide) sanity checks — optional but helpful
+      if (!isBoolish(meta.Hidden)) {
+        console.warn(`${entry}: Hidden should be boolean-ish (true/false/yes/no/0/1)`);
+      }
+      if (!isBoolish(meta.Draft)) {
+        console.warn(`${entry}: Draft should be boolean-ish (true/false/yes/no/0/1)`);
+      }
+
+      // Optional policy: if both Hidden and Draft are present but disagree, warn
+      if (meta.Hidden !== undefined && meta.Draft !== undefined) {
+        if (toBool(meta.Hidden) !== toBool(meta.Draft)) {
+          console.warn(`${entry}: Hidden and Draft values disagree — verify intent`);
+        }
+      }
+
+      // (Optional) Thumbnail: just a gentle lint if obviously empty
+      if (typeof meta.Thumbnail === 'string' && meta.Thumbnail.trim() === '') {
+        console.warn(`${entry}: Thumbnail is an empty string — remove or set a path`);
       }
     }
+
   } catch (e) {
+    // Unexpected runtime error (bad JSON, IO issue, etc.)
     console.error(e.message);
     process.exit(1);
   }
-  if (!ok) process.exit(2);
+
+  if (!ok) {
+    process.exit(2);
+  }
   console.log('Validation passed');
 }
 
 main();
-
